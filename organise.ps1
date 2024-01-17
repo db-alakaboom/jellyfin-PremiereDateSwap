@@ -15,12 +15,12 @@ try {
 }
 
 # Run SQL commands
-$databasePath = "C:\ProgramData\Jellyfin\Server\data\library.db" 
+$databasePath = "C:\ProgramData\Jellyfin\YOURUSERNAMEHERE\data\library.db" 
 
 # Wait for the database lock to be released
 for ($i = 1; $i -le 10; $i++) {
     try {
-        & "C:\Users\SERVER\Desktop\sqlite\sqlite3.exe" $databasePath "PRAGMA locking_mode = NORMAL;"
+        & "C:\path\to\sqlite3.exe" $databasePath "PRAGMA locking_mode = NORMAL;"
         break
     } catch {
         Write-Host "Waiting for database lock to be released... (Attempt $i)"
@@ -40,7 +40,7 @@ $sqlCommands = @(
 foreach ($sqlCommand in $sqlCommands) {
     try {
         Write-Host "Executing SQL command: $sqlCommand"
-        & "C:\Users\SERVER\Desktop\sqlite\sqlite3.exe" $databasePath $sqlCommand
+        & "C:\path\to\sqlite3.exe" $databasePath $sqlCommand
     } catch {
         Write-Host "Error executing SQL command: $sqlCommand - $_"
         throw "SQL command execution failed."
@@ -50,7 +50,7 @@ foreach ($sqlCommand in $sqlCommands) {
 # Close the SQLite database
 try {
     Write-Host "Closing SQLite database..."
-    & "C:\Users\SERVER\Desktop\sqlite\sqlite3.exe" $databasePath ".exit"
+    & "C:\path\to\sqlite3.exe" $databasePath ".exit"
 } catch {
     Write-Host "Error closing SQLite database: $_"
     throw "Closing SQLite database failed."
