@@ -1,29 +1,88 @@
-# Stop Jellyfin service
-Write-Host "Stopping Jellyfin service..."
+# Specify the Jellyfin API endpoint for fetching user sessions
+$apiEndpoint = "https://YOURDOMAIN/Sessions?api_key=YOURAPIKEYHERE"
+
+# Get the directory where the script is located
+$scriptDirectory = Split-Path -Parent $MyInvocation.MyCommand.Definition
+
+# Define log file path in the same directory as the script
+$logFilePath = Join-Path -Path $scriptDirectory -ChildPath "log.txt"
+
+# Log levels
+$logLevels = @{
+    Info    = "INFO"
+    Warning = "WARNING"
+    Error   = "ERROR"
+}
+
+# Function to log messages
+function Log-Message {
+    param (
+        [string]$message,
+        [string]$level = "INFO"
+    )
+
+    # Get current timestamp
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+
+    # Create log entry
+    $logEntry = "$timestamp - [$level] - $message"
+
+    # Append log entry to log file
+    Add-Content -Path $logFilePath -Value $logEntry
+
+    # Output log entry to console
+    Write-Output $logEntry
+}
+
+Log-Message "Script starting..." -level $logLevels.Info
+
+# Make a request to the API endpoint to get information about user sessions
+Log-Message "Making a request to local Jellyfin API to get information about user sessions..." -level $logLevels.Info
+$activeSessions = Invoke-RestMethod -Uri $apiEndpoint -Method Get
+
+# Check if there are any active sessions (logged-in users)
+if ($activeSessions.Count -gt 0) {
+    Log-Message "Jellyfin reporting active user sessions." -level $logLevels.Info
+    
+    # Check if any session has "NowPlayingItem" in the JSON response
+    $anySessionWithNowPlayingItem = $activeSessions | Where-Object { $_ -match "NowPlayingItem" }
+
+    if ($anySessionWithNowPlayingItem) {
+        Log-Message "Found active user session with 'NowPlayingItem' in the JSON response. Exiting script to avoid issues." -level $logLevels.Warning
+        exit
+    } else {
+        Log-Message "Did not find active user sessions with 'NowPlayingItem' in the JSON response. Proceeding with the script." -level $logLevels.Info
+    }
+} else {
+    Log-Message "No active user sessions reported. Proceeding with the script." -level $logLevels.Info
+}
+
+#If no issues, continues to stop the server
+Log-Message "Stopping Jellyfin service..." -level $logLevels.Info
 $service = Get-Service -DisplayName "Jellyfin Server"
 
 try {
     if ($service.Status -eq 'Running') {
         Stop-Service -DisplayName "Jellyfin Server" -Force 
-
         # Wait for the service to stop
-        Start-Sleep -Seconds 10  # Adjust the sleep duration as needed
+        Start-Sleep -Seconds 10 
     }
 } catch {
-    Write-Host "Error stopping Jellyfin service: $_"
-    throw "Stopping Jellyfin service failed."
+    $errorMessage = "Error stopping Jellyfin service: $_"
+    Log-Message $errorMessage -level $logLevels.Error
+    throw $errorMessage
 }
 
 # Run SQL commands
-$databasePath = "C:\ProgramData\Jellyfin\YOURUSERNAMEHERE\data\library.db" 
+$databasePath = "C:\ProgramData\Jellyfin\Server\data\library.db" 
 
 # Wait for the database lock to be released
 for ($i = 1; $i -le 10; $i++) {
     try {
-        & "C:\path\to\sqlite3.exe" $databasePath "PRAGMA locking_mode = NORMAL;"
+        & "C:\your\path\to\sqlite3.exe" $databasePath "PRAGMA locking_mode = NORMAL;"
         break
     } catch {
-        Write-Host "Waiting for database lock to be released... (Attempt $i)"
+        Log-Message "Waiting for database lock to be released... (Attempt $i)" -level $logLevels.Info
         Start-Sleep -Seconds 5
     }
 }
@@ -39,28 +98,32 @@ $sqlCommands = @(
 # Execute SQL commands
 foreach ($sqlCommand in $sqlCommands) {
     try {
-        Write-Host "Executing SQL command: $sqlCommand"
-        & "C:\path\to\sqlite3.exe" $databasePath $sqlCommand
+        Log-Message "Executing SQL command: $sqlCommand" -level $logLevels.Info
+        & "C:\your\path\to\sqlite3.exe" $databasePath $sqlCommand
     } catch {
-        Write-Host "Error executing SQL command: $sqlCommand - $_"
-        throw "SQL command execution failed."
+        $errorMessage = "Error executing SQL command: $sqlCommand - $_"
+        Log-Message $errorMessage -level $logLevels.Error
+        throw $errorMessage
     }
 }
 
 # Close the SQLite database
 try {
-    Write-Host "Closing SQLite database..."
-    & "C:\path\to\sqlite3.exe" $databasePath ".exit"
+    Log-Message "Closing SQLite database..." -level $logLevels.Info
+    & "C:\your\path\to\sqlite3.exe" $databasePath ".exit"
 } catch {
-    Write-Host "Error closing SQLite database: $_"
-    throw "Closing SQLite database failed."
+    $errorMessage = "Error closing SQLite database: $_"
+    Log-Message $errorMessage -level $logLevels.Error
+    throw $errorMessage
 }
 
-# Start Jellyfin service
-Write-Host "Starting Jellyfin service..."
+Log-Message "Starting Jellyfin service..." -level $logLevels.Info
 try {
     Start-Service -DisplayName "Jellyfin Server"
 } catch {
-    Write-Host "Error starting Jellyfin service: $_"
-    throw "Starting Jellyfin service failed."
+    $errorMessage = "Error starting Jellyfin service: $_"
+    Log-Message $errorMessage -level $logLevels.Error
+    throw $errorMessage
 }
+
+Log-Message "Script completed." -level $logLevels.Info
